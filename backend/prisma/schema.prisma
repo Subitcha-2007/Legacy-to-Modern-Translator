@@ -1,0 +1,141 @@
+// Prisma Schema for Sakthimurugan Medical Agencies ("SMM")
+// Wholesale Pharmaceutical Distribution - Erode, Tamil Nadu
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  RETAILER
+  ADMIN
+}
+
+enum DeliveryType {
+  DOOR_DELIVERY
+  STORE_PICKUP
+}
+
+enum PaymentStatus {
+  PAID
+  PENDING
+  CREDIT_ACCOUNT
+}
+
+enum OrderStatus {
+  PENDING
+  DISPATCHED
+  COMPLETED
+  CANCELLED
+}
+
+enum TransactionType {
+  DEBIT
+  CREDIT
+}
+
+model User {
+  id              Int       @id @default(autoincrement())
+  role            Role      @default(RETAILER)
+  shopName        String?   // e.g. "Erode City Medicals & General Stores"
+  ownerName       String    // e.g. "K. Senthil Kumar"
+  email           String    @unique
+  phone           String
+  passwordHash    String
+  dlNumber        String?   // Drug License Number (e.g. TN-ERD-20B-48291)
+  dlDocumentUrl   String?
+  gstNumber       String?   // GSTIN e.g. 33AABCE5678F1ZQ
+  gstDocumentUrl  String?
+  bankAccount     String?
+  bankIfsc        String?
+  isApproved      Boolean   @default(false)
+  creditLimit     Float     @default(0.0) // Approved maximum credit in INR
+  currentBalance  Float     @default(0.0) // Outstanding unpaid amount in INR
+  address         String?   // Retail shop address in Erode
+  pincode         String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  orders          Order[]
+  transactions    PaymentTransaction[]
+
+  @@map("users")
+}
+
+model Product {
+  id            Int         @id @default(autoincrement())
+  brandName     String      // e.g. "Dolo 650 Tablet", "Augmentin 625 Duo"
+  genericName   String      // e.g. "Paracetamol 650mg", "Amoxicillin & Potassium Clavulanate"
+  companyName   String      // e.g. "Micro Labs", "GlaxoSmithKline", "Cipla"
+  description   String
+  imageUrl      String?
+  pricePerBox   Float       // Wholesale price per box (e.g. 10x10 strips)
+  pricePerStrip Float       // Wholesale price per strip
+  stockQuantity Int         // Available boxes in stock
+  batchNumber   String      // e.g. "SMM-BT-9842"
+  expiryDate    String      // e.g. "10/2027"
+  hsnCode       String      @default("3004") // Pharma HSN code
+  gstRate       Float       @default(12.0)   // GST percentage (12%)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  orderItems    OrderItem[]
+
+  @@map("products")
+}
+
+model Order {
+  id              Int           @id @default(autoincrement())
+  invoiceNumber   String        @unique // e.g. "SMM-INV-2026-0001"
+  retailerId      Int
+  retailer        User          @relation(fields: [retailerId], references: [id])
+  totalAmount     Float
+  deliveryType    DeliveryType  @default(DOOR_DELIVERY)
+  deliveryAddress String?
+  dispatchRoute   String?       // "Erode Central", "Perundurai Route", "Bhavani-Gobi Route"
+  paymentMethod   String        // "ONLINE", "CASH", "CREDIT_ACCOUNT"
+  paymentStatus   PaymentStatus @default(PENDING)
+  orderStatus     OrderStatus   @default(PENDING)
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  items           OrderItem[]
+  transactions    PaymentTransaction[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id              Int       @id @default(autoincrement())
+  orderId         Int
+  order           Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId       Int
+  product         Product   @relation(fields: [productId], references: [id])
+  quantity        Int       // Number of units
+  unitType        String    @default("BOX") // "BOX" or "STRIP"
+  priceAtPurchase Float
+
+  @@map("order_items")
+}
+
+model PaymentTransaction {
+  id              Int             @id @default(autoincrement())
+  retailerId      Int
+  retailer        User            @relation(fields: [retailerId], references: [id])
+  orderId         Int?
+  order           Order?          @relation(fields: [orderId], references: [id])
+  transactionType TransactionType // DEBIT (Credit purchase) or CREDIT (Payment received)
+  amount          Float
+  balanceAfter    Float           // Outstanding balance after transaction
+  paymentMode     String?         // "CASH", "CHEQUE", "NEFT_RTGS", "UPI", "CREDIT_PURCHASE"
+  referenceNumber String?         // Cheque #, UTR, or Invoice number
+  notes           String          // Purpose: e.g. "Invoice SMM-INV-2026-0041", "Cheque #409211 received"
+  createdAt       DateTime        @default(now())
+
+  @@map("payment_transactions")
+}

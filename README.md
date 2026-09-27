@@ -8,44 +8,85 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue?logo=typescript)](https://www.typescriptlang.org/)
 [![Prisma ORM](https://img.shields.io/badge/Prisma-5.22-teal?logo=prisma)](https://www.prisma.io/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.4-38bdf8?logo=tailwind-css)](https://tailwindcss.com/)
+[![Deployment: Vercel](https://img.shields.io/badge/Deployment-Vercel-black?logo=vercel)](https://vercel.com/)
+[![Database: Neon PostgreSQL](https://img.shields.io/badge/Database-Neon%20Postgres-green?logo=postgresql)](https://neon.tech/)
 
 ---
 
 ## 1. Project Overview
 
-**Legacy → Modern** is a developer platform designed to accelerate code modernization for engineering teams. It bridges the gap between old legacy codebases (jQuery, AngularJS 1.x, Backbone.js, ES5 callback-heavy JavaScript, legacy backend patterns) and modern, type-safe architectures (React 18 + TypeScript, Next.js 14 App Router, modern async/await pipelines).
+**Legacy → Modern** is an enterprise-ready developer platform designed to accelerate code modernization for engineering teams. It transforms legacy codebases (jQuery, AngularJS 1.x, Backbone.js, ES5 callback-heavy JavaScript, legacy backend patterns) into modern, type-safe architectures (React 18 + TypeScript, Next.js 14 App Router, modern async/await pipelines).
 
-Unlike standard code formatters or simple chat prompts, **Legacy → Modern** delivers:
+Unlike standard formatters or simple chat prompts, **Legacy → Modern** delivers:
 - **Intelligent Code Conversion**: Dual-mode engine utilizing Google Gemini API with fallback to an intelligent built-in AST/pattern modernization transformer.
 - **Behavioral Test Harness**: Generates unit, behavioral, integration, and regression test cases alongside the converted code to guarantee behavioral equivalence.
 - **Interactive Aligned Diff Viewer**: Side-by-side subtle visual inspection highlighting transformed code blocks and deprecated API removals.
-- **Relational Persistence**: Full SQLite/PostgreSQL relational database backing via Prisma ORM for User management, Projects, Conversions, and Test Suites.
+- **Relational Persistence**: Full PostgreSQL / SQLite database backing via Prisma ORM for User management, Projects, Conversions, and Test Suites.
 - **Security & Session Management**: Bcrypt password hashing, JWT session cookies, and user data isolation.
 
 ---
 
-## 2. Core Features
+## 2. Production Architecture
 
-- 🔐 **Authentication-First Experience**: Complete registration and login system with bcrypt hashing, duplicate email detection, password strength validation, and JWT session handling.
-- ⚡ **Two-Column Aligned Code Editor**: Custom-engineered dual editor (Legacy Input vs Modern Output) with equal width/height, monospaced typography (`JetBrains Mono`), line numbers, format/clear/copy/download actions.
-- 🧠 **AI Conversion Pipeline**: Multi-step animated progress visualization (*Analyzing code* → *Detecting patterns* → *Synthesizing modern components* → *Generating tests* → *Validating type soundness*).
-- 📊 **Conversion Insights & Audit Trail**: Real-time breakdown of changes count, deprecated APIs removed, dependencies updated, and confidence rating.
-- 🧪 **Generated Test Cases & Live Runner**: Interactive test suite with status indicators (`PASS`, `FAIL`, `RUNNING`, `SKIPPED`), execution runner, auto-fix engine, and slide-over detail panel.
-- 📁 **Saved Projects Management**: Full project organization with create, rename, delete, and 1-click **Load Demo Project** for instant onboarding.
-- 📜 **Conversion History**: Searchable, filterable, and sortable audit history linked directly to the database.
-- 🌓 **Precision Dark & Light Themes**: Strict custom color palettes with user preference persisted in the relational database across sessions.
+```
+┌────────────────────────────────────────────────────────┐
+│             Frontend & User Interface (Vercel)         │
+│  - React 18, TypeScript, Tailwind CSS, App Router     │
+│  - Dual-Column Code Editor, Diff Viewer, Test Harness │
+└───────────────────────────┬────────────────────────────┘
+                            │  HTTPS (REST / JWT)
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│             Backend API Layer (Next.js / Node.js)      │
+│  - Authentication (/api/auth/register, /api/auth/login)│
+│  - Conversions & AI Engine (/api/conversions)          │
+│  - Test Suite Runner (/api/tests, /api/tests/:id/run)  │
+│  - Project CRUD & Diff Retrieval (/api/projects)       │
+└───────────────────────────┬────────────────────────────┘
+                            │  Prisma ORM Connection
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│             Production Database (Neon / Supabase)      │
+│  - PostgreSQL / Relational Schema                      │
+│  - User, UserPreference, Project, Conversion, TestCase │
+└────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## 3. Technology Stack
+## 3. Public Production Deployment Guide
 
-| Layer | Technology |
-|---|---|
-| **Frontend** | React 18, TypeScript, Tailwind CSS, Lucide Icons, Next.js App Router |
-| **Backend** | Node.js, Next.js API Routes, JWT (`jsonwebtoken`), Bcrypt (`bcryptjs`) |
-| **Database & ORM**| SQLite (zero-config local dev) / PostgreSQL compatible, Prisma ORM |
-| **AI Engine** | Google Gemini API (`gemini-1.5-flash`) + Intelligent Built-in Pattern Synthesizer |
-| **Typography** | Inter (UI), JetBrains Mono / Fira Code (Code) |
+### Option A: 1-Click Deployment to Vercel (Recommended)
+
+1. **Push your code to GitHub**:
+   ```bash
+   git add -A
+   git commit -m "feat: complete Legacy to Modern platform"
+   git push origin main
+   ```
+
+2. **Deploy to Vercel**:
+   - Go to [Vercel Dashboard](https://vercel.com/new).
+   - Import your GitHub repository.
+   - Set Environment Variables in Project Settings:
+     - `DATABASE_URL`: Your production PostgreSQL connection string (from [Neon](https://neon.tech) or [Supabase](https://supabase.com)).
+     - `AUTH_SECRET`: A secure random JWT secret (e.g. `openssl rand -hex 32`).
+     - `AI_API_KEY`: *(Optional)* Your Google Gemini API Key.
+   - Click **Deploy**.
+
+3. **Initialize the Production Database**:
+   In your local terminal or via CI/CD, point `DATABASE_URL` to your Neon/Supabase database and run:
+   ```bash
+   npx prisma db push
+   npm run db:seed
+   ```
+
+---
+
+### Option B: Deploy to Render / Railway
+
+1. Connect your repository to [Render](https://render.com) using the included [`render.yaml`](file:///c:/Users/USER/Desktop/asp/render.yaml).
+2. Render will automatically provision a PostgreSQL database instance and deploy the web service.
 
 ---
 
@@ -160,86 +201,32 @@ model TestCase {
 
 ---
 
-## 6. Installation & Local Setup
+## 6. Local Development Setup
 
-### Prerequisites
-- Node.js 18+ (or Node.js 20+)
-- npm or pnpm or yarn
-
-### 1. Clone Repository
 ```bash
-git clone https://github.com/your-username/legacy-modern.git
-cd legacy-modern
-```
-
-### 2. Install Dependencies
-```bash
+# 1. Install dependencies
 npm install
-```
 
-### 3. Setup Environment Variables
-Create a `.env` file in the project root:
-```bash
+# 2. Configure environment
 cp .env.example .env
-```
 
-Default configuration (`.env`):
-```env
-DATABASE_URL="file:./dev.db"
-AUTH_SECRET="your-jwt-auth-secret-key-here"
-AI_API_KEY="" # Optional: Add Google Gemini API Key for live AI completions
-NODE_ENV="development"
-PORT=3000
-```
-
-### 4. Initialize Database
-Run the setup script to initialize the SQLite database tables and generate Prisma Client:
-```bash
+# 3. Setup SQLite database
 npm run db:setup
-```
-
-*(Optional)* Seed initial showcase data:
-```bash
 npm run db:seed
-```
 
-### 5. Run the Application
-Start the development server:
-```bash
+# 4. Start Next.js development server
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
-
 ---
 
-## 7. Demo Accounts
+## 7. Default Seeded Credentials
 
-If you ran `npm run db:seed`, you can immediately sign in with:
-- **Email**: `demo@legacymodern.dev`
+- **Demo User**: `demo@legacymodern.dev`
 - **Password**: `DemoPass123!`
 
-Or click **Create Account** on the landing page to register your own custom user account!
-
 ---
 
-## 8. Theme Palette Specification
+## 8. License
 
-| Token | Dark Theme Hex | Light Theme Hex |
-|---|---|---|
-| **Background** | `#0F1319` | `#F7F8FA` |
-| **Surface** | `#171C23` | `#FFFFFF` |
-| **Elevated** | `#1D2430` | `#F1F3F6` |
-| **Border** | `#2B3440` | `#DCE1E8` |
-| **Primary Text** | `#F1F5F9` | `#1D2430` |
-| **Secondary Text** | `#98A2B3` | `#667085` |
-| **Accent** | `#6D8DFF` | `#4169E1` |
-| **Success** | `#39B77A` | `#218653` |
-| **Warning** | `#E4A63A` | `#A66B00` |
-| **Error** | `#E35D6A` | `#C83C4A` |
-
----
-
-## 9. License
-
-This project is open source and available under the [MIT License](LICENSE).
+This project is licensed under the [MIT License](LICENSE).

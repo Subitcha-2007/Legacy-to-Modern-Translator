@@ -1,567 +1,393 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { useCart, Product } from '@/context/CartContext';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import Logo from '@/components/Logo';
+import { useToast } from '@/context/ToastContext';
 import {
-  Search,
-  Filter,
+  ArrowRightLeft,
+  Lock,
+  Mail,
+  User,
   CheckCircle2,
-  AlertTriangle,
-  XCircle,
-  Truck,
-  Plus,
-  Minus,
-  ShoppingBag,
-  Sparkles,
-  Layers,
-  Calendar,
-  Building,
-  ShieldCheck,
-  CreditCard,
+  Cpu,
+  FileCheck2,
+  GitCompare,
+  Database,
   ArrowRight,
-  MapPin,
-  Clock,
-  Phone
+  ShieldCheck,
+  Zap
 } from 'lucide-react';
 
 export default function HomePage() {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [selectedCompany, setSelectedCompany] = useState('ALL');
-  const [stockFilter, setStockFilter] = useState('ALL');
-  const [quantities, setQuantities] = useState<{ [productId: number]: number }>({});
-  const [unitTypes, setUnitTypes] = useState<{ [productId: number]: 'BOX' | 'STRIP' }>({});
-  const [notification, setNotification] = useState<string | null>(null);
+  const { user, login, register, loading } = useAuth();
+  const { success, error: toastError } = useToast();
+  const router = useRouter();
 
-  const { addToCart, items } = useCart();
-  const { user } = useAuth();
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
+  // If already authenticated, redirect to workspace
   useEffect(() => {
-    fetchProducts();
-  }, [search, selectedCompany, stockFilter]);
+    if (!loading && user) {
+      router.push('/workspace');
+    }
+  }, [user, loading, router]);
 
-  const fetchProducts = async () => {
-    try {
-      setLoading(true);
-      const params = new URLSearchParams();
-      if (search.trim()) params.append('search', search.trim());
-      if (selectedCompany !== 'ALL') params.append('companyName', selectedCompany);
-      if (stockFilter !== 'ALL') params.append('stockStatus', stockFilter);
+  const calculatePasswordStrength = (pwd: string) => {
+    if (!pwd) return 0;
+    let score = 0;
+    if (pwd.length >= 6) score += 25;
+    if (pwd.length >= 10) score += 25;
+    if (/[A-Z]/.test(pwd)) score += 25;
+    if (/[0-9!@#$%^&*]/.test(pwd)) score += 25;
+    return score;
+  };
 
-      const res = await fetch(`/api/products?${params.toString()}`);
-      if (res.ok) {
-        const data = await res.json();
-        setProducts(data.products || []);
+  const strength = calculatePasswordStrength(password);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError(null);
+
+    if (mode === 'signup') {
+      if (!name.trim()) {
+        setFormError('Please enter your full name.');
+        return;
       }
-    } catch (err) {
-      console.error('Failed to fetch catalog:', err);
-    } finally {
-      setLoading(false);
+      if (!email.trim() || !email.includes('@')) {
+        setFormError('Please provide a valid email address.');
+        return;
+      }
+      if (password.length < 6) {
+        setFormError('Password must be at least 6 characters.');
+        return;
+      }
+      if (password !== confirmPassword) {
+        setFormError('Passwords do not match.');
+        return;
+      }
+
+      setSubmitting(true);
+      const res = await register({ name, email, password, confirmPassword });
+      setSubmitting(false);
+
+      if (res.success) {
+        success('Account created successfully! Welcome to Legacy → Modern.');
+        router.push('/workspace');
+      } else {
+        setFormError(res.error || 'Failed to create account.');
+        toastError(res.error || 'Registration failed.');
+      }
+    } else {
+      if (!email.trim() || !password) {
+        setFormError('Please enter both email and password.');
+        return;
+      }
+
+      setSubmitting(true);
+      const res = await login(email, password);
+      setSubmitting(false);
+
+      if (res.success) {
+        success('Signed in successfully.');
+        router.push('/workspace');
+      } else {
+        setFormError(res.error || 'Invalid credentials.');
+        toastError(res.error || 'Invalid credentials.');
+      }
     }
   };
 
-  const getQty = (productId: number) => quantities[productId] || 1;
-  const getUnit = (productId: number) => unitTypes[productId] || 'BOX';
-
-  const handleQtyChange = (productId: number, delta: number) => {
-    const current = getQty(productId);
-    const updated = Math.max(1, current + delta);
-    setQuantities(prev => ({ ...prev, [productId]: updated }));
-  };
-
-  const setDirectQty = (productId: number, val: number) => {
-    setQuantities(prev => ({ ...prev, [productId]: Math.max(1, val) }));
-  };
-
-  const handleUnitToggle = (productId: number, unit: 'BOX' | 'STRIP') => {
-    setUnitTypes(prev => ({ ...prev, [productId]: unit }));
-  };
-
-  const handleAdd = (product: Product) => {
-    const qty = getQty(product.id);
-    const unit = getUnit(product.id);
-    addToCart(product, qty, unit);
-
-    setNotification(`Added ${qty} ${unit.toLowerCase()}(s) of ${product.brandName} to cart`);
-    setTimeout(() => setNotification(null), 3000);
-  };
-
-  const companies = [
-    'ALL',
-    'Micro Labs Limited',
-    'GlaxoSmithKline (GSK)',
-    'Alkem Laboratories Ltd',
-    'Cipla Ltd',
-    'USV Private Limited',
-    'Glenmark Pharmaceuticals',
-    'Abbott Healthcare',
-    'Torrent Pharmaceuticals',
-    'Pfizer Ltd'
-  ];
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-light-bg dark:bg-dark-bg">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-blue-600 animate-pulse flex items-center justify-center text-white">
+            <ArrowRightLeft className="w-4 h-4 animate-spin" />
+          </div>
+          <p className="text-xs font-mono text-light-textSecondary dark:text-dark-textSecondary">
+            Initializing secure workspace...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="bg-white min-h-screen pb-16">
-      {/* Toast Notification */}
-      {notification && (
-        <div className="fixed bottom-6 right-6 z-50 bg-[#0F4C81] text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 border border-cyan-300">
-          <CheckCircle2 className="w-5 h-5 text-cyan-300" />
-          <span className="text-sm font-semibold">{notification}</span>
+    <div className="min-h-screen flex flex-col justify-between bg-light-bg dark:bg-dark-bg text-light-textPrimary dark:text-dark-textPrimary">
+      {/* Top minimal bar */}
+      <header className="px-6 py-4 flex items-center justify-between border-b border-light-border dark:border-dark-border bg-light-surface/60 dark:bg-dark-surface/60 backdrop-blur-md sticky top-0 z-20">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-sm">
+            <ArrowRightLeft className="w-4 h-4" />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="font-semibold text-sm tracking-tight text-light-textPrimary dark:text-dark-textPrimary">Legacy</span>
+            <span className="text-light-accent dark:text-dark-accent font-mono font-bold text-xs">→</span>
+            <span className="font-semibold text-sm tracking-tight text-light-accent dark:text-dark-accent">Modern</span>
+          </div>
         </div>
-      )}
 
-      {/* Hero Wholesale Section with Pure Colors & Light Cyan Highlights */}
-      <section className="bg-white border-b border-slate-200 py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-          <div className="lg:col-span-8 space-y-4">
-            <div className="inline-flex items-center gap-2 bg-[#DFF3FF] border border-[#BEE3F8] text-[#0F4C81] px-3.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
-              <ShieldCheck className="w-4 h-4 text-[#0F4C81]" />
-              Direct Wholesale Stockist • Erode District, Tamil Nadu
-            </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              setMode('signin');
+              setFormError(null);
+            }}
+            className={`px-3 py-1.5 text-xs font-medium rounded-md transition ${
+              mode === 'signin'
+                ? 'bg-light-elevated dark:bg-dark-elevated text-light-textPrimary dark:text-dark-textPrimary border border-light-border dark:border-dark-border'
+                : 'text-light-textSecondary dark:text-dark-textSecondary hover:text-light-textPrimary'
+            }`}
+          >
+            Sign In
+          </button>
+          <button
+            onClick={() => {
+              setMode('signup');
+              setFormError(null);
+            }}
+            className={`px-3 py-1.5 text-xs font-medium rounded-md transition ${
+              mode === 'signup'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'bg-light-elevated dark:bg-dark-elevated text-light-textPrimary dark:text-dark-textPrimary hover:bg-light-border dark:hover:bg-dark-border'
+            }`}
+          >
+            Create Account
+          </button>
+        </div>
+      </header>
 
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight leading-tight">
-              Wholesale Medical Supply for <br />
-              <span className="text-[#0F4C81]">
-                Retail Pharmacies in Erode
-              </span>
-            </h1>
-
-            <p className="text-slate-600 text-sm sm:text-base max-w-2xl leading-relaxed">
-              Sakthimurugan Medical Agencies (SMM) is a premier wholesale pharmaceutical distributor serving licensed retail pharmacies across Erode, Perundurai, Bhavani, and Gobichettipalayam. Direct manufacturer rates, batch-verified supplies, and dedicated delivery fleet vans.
-            </p>
-
-            {/* 4 Trust Metric Cards in Light Cyan */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-              <div className="bg-[#DFF3FF] rounded-xl p-3.5 border border-[#BEE3F8]">
-                <div className="text-xl sm:text-2xl font-black text-[#0F4C81]">500+</div>
-                <div className="text-xs text-slate-600 font-medium">Pharmacies in Erode</div>
-              </div>
-              <div className="bg-[#DFF3FF] rounded-xl p-3.5 border border-[#BEE3F8]">
-                <div className="text-xl sm:text-2xl font-black text-[#0F4C81]">Daily</div>
-                <div className="text-xs text-slate-600 font-medium">Fleet Van Dispatch</div>
-              </div>
-              <div className="bg-[#DFF3FF] rounded-xl p-3.5 border border-[#BEE3F8]">
-                <div className="text-xl sm:text-2xl font-black text-[#0F4C81]">15-30 D</div>
-                <div className="text-xs text-slate-600 font-medium">Credit Account Cycle</div>
-              </div>
-              <div className="bg-[#DFF3FF] rounded-xl p-3.5 border border-[#BEE3F8]">
-                <div className="text-xl sm:text-2xl font-black text-[#0F4C81]">100%</div>
-                <div className="text-xs text-slate-600 font-medium">Genuine Formulations</div>
-              </div>
-            </div>
+      {/* Main hero & auth container */}
+      <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-8 md:py-16 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+        {/* Left column: Value Proposition & Product Identity */}
+        <div className="lg:col-span-7 space-y-6">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-blue-500/20 bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs font-mono font-medium">
+            <Zap className="w-3.5 h-3.5" />
+            <span>AI-Assisted Legacy Migration Engine</span>
           </div>
 
-          {/* Quick Action Card in Light Cyan / White */}
-          <div className="lg:col-span-4 bg-[#DFF3FF]/60 rounded-2xl p-6 border border-[#BEE3F8] shadow-sm space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-cyan-200">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-[#0F4C81] text-white flex items-center justify-center font-black text-xs">
-                  SMM
-                </div>
-                <span className="font-bold text-sm text-[#0F4C81]">Wholesale Portal</span>
+          <h1 className="text-3xl md:text-5xl font-bold tracking-tight text-light-textPrimary dark:text-dark-textPrimary leading-tight">
+            Transform legacy code into modern, <span className="text-light-accent dark:text-dark-accent">production-ready</span> applications.
+          </h1>
+
+          <p className="text-sm md:text-base text-light-textSecondary dark:text-dark-textSecondary leading-relaxed max-w-xl">
+            Modernize jQuery, AngularJS, ES5 callbacks, and legacy architectures into type-safe React + TypeScript with automated behavioral test verification.
+          </p>
+
+          {/* Value Props Matrix */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-2">
+            <div className="p-3.5 rounded-lg border border-light-border dark:border-dark-border bg-light-surface dark:bg-dark-surface space-y-1.5">
+              <div className="flex items-center gap-2 text-xs font-semibold text-light-textPrimary dark:text-dark-textPrimary">
+                <Cpu className="w-4 h-4 text-light-accent dark:text-dark-accent" />
+                <span>AST & AI Code Synthesis</span>
               </div>
-              <span className="text-[10px] font-bold bg-[#0F4C81] text-white px-2 py-0.5 rounded-full uppercase">
-                B2B Erode
-              </span>
+              <p className="text-[11px] text-light-textSecondary dark:text-dark-textSecondary leading-normal">
+                Converts DOM mutation and callbacks into React hooks, state models, and async/await.
+              </p>
             </div>
 
-            {user?.role === 'RETAILER' ? (
-              <div className="space-y-3">
-                <div className="bg-white p-3 rounded-xl border border-slate-200 text-xs">
-                  <div className="text-slate-500">Logged in Medical Shop:</div>
-                  <div className="font-bold text-slate-900 text-sm">{user.shopName}</div>
-                  <div className="text-[11px] text-slate-500 font-mono mt-0.5">DL: {user.dlNumber || 'Verified'}</div>
-                </div>
-
-                <div className="bg-white border border-[#BEE3F8] p-3 rounded-xl text-xs space-y-1">
-                  <div className="flex justify-between text-slate-600 font-semibold">
-                    <span>Approved Credit Limit:</span>
-                    <span className="font-bold text-slate-900">₹{user.creditLimit?.toLocaleString('en-IN')}</span>
-                  </div>
-                  <div className="flex justify-between text-slate-600 font-semibold">
-                    <span>Outstanding Balance:</span>
-                    <span className="font-bold text-amber-700">₹{user.currentBalance?.toLocaleString('en-IN')}</span>
-                  </div>
-                  <div className="flex justify-between text-[#0F4C81] font-bold border-t border-slate-100 pt-1 text-sm">
-                    <span>Available Credit:</span>
-                    <span>₹{Math.max(0, (user.creditLimit || 0) - (user.currentBalance || 0)).toLocaleString('en-IN')}</span>
-                  </div>
-                </div>
-
-                <div className="flex gap-2 pt-1">
-                  <Link
-                    href="/cart"
-                    className="flex-1 bg-[#0F4C81] hover:bg-[#0B3860] text-white text-center py-2.5 rounded-xl font-bold text-xs transition flex items-center justify-center gap-1.5 shadow-sm"
-                  >
-                    <ShoppingBag className="w-4 h-4" />
-                    <span>Cart ({items.length})</span>
-                  </Link>
-                  <Link
-                    href="/retailer/orders"
-                    className="flex-1 bg-white hover:bg-slate-50 text-slate-800 text-center py-2.5 rounded-xl font-bold text-xs border border-slate-300 transition"
-                  >
-                    Invoices &rarr;
-                  </Link>
-                </div>
+            <div className="p-3.5 rounded-lg border border-light-border dark:border-dark-border bg-light-surface dark:bg-dark-surface space-y-1.5">
+              <div className="flex items-center gap-2 text-xs font-semibold text-light-textPrimary dark:text-dark-textPrimary">
+                <FileCheck2 className="w-4 h-4 text-emerald-500" />
+                <span>Behavioral Test Harness</span>
               </div>
-            ) : user?.role === 'ADMIN' ? (
-              <div className="space-y-3">
-                <div className="bg-white border border-slate-200 p-3 rounded-xl text-xs">
-                  <div className="font-bold text-[#0F4C81] text-sm">Wholesale Admin Console</div>
-                  <p className="text-slate-600 mt-1">Review retailer approvals, manage delivery routes, and update inventory stock.</p>
-                </div>
-                <Link
-                  href="/admin/dashboard"
-                  className="w-full bg-[#0F4C81] hover:bg-[#0B3860] text-white text-center py-2.5 rounded-xl font-bold text-xs transition block shadow-sm"
-                >
-                  Open Admin Hub
-                </Link>
+              <p className="text-[11px] text-light-textSecondary dark:text-dark-textSecondary leading-normal">
+                Auto-generates unit and behavioral test suites to guarantee behavioral parity.
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-lg border border-light-border dark:border-dark-border bg-light-surface dark:bg-dark-surface space-y-1.5">
+              <div className="flex items-center gap-2 text-xs font-semibold text-light-textPrimary dark:text-dark-textPrimary">
+                <GitCompare className="w-4 h-4 text-amber-500" />
+                <span>Clean Code Diff Viewer</span>
               </div>
-            ) : (
-              <div className="space-y-3">
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  Are you a licensed retail medical shop in Erode district? Register with your 20B/21B Drug License to access wholesale pricing and Credit Account billing.
-                </p>
-                <div className="space-y-2">
-                  <Link
-                    href="/register"
-                    className="w-full bg-[#0F4C81] hover:bg-[#0B3860] text-white text-center py-2.5 rounded-xl font-bold text-xs transition block shadow-sm"
-                  >
-                    Register Retail Medical Shop
-                  </Link>
-                  <Link
-                    href="/login"
-                    className="w-full bg-white hover:bg-slate-50 text-slate-800 text-center py-2.5 rounded-xl font-bold text-xs border border-slate-300 transition block"
-                  >
-                    Existing Shop Sign In
-                  </Link>
-                </div>
+              <p className="text-[11px] text-light-textSecondary dark:text-dark-textSecondary leading-normal">
+                Review side-by-side modifications with syntax highlighting and deprecated API flags.
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-lg border border-light-border dark:border-dark-border bg-light-surface dark:bg-dark-surface space-y-1.5">
+              <div className="flex items-center gap-2 text-xs font-semibold text-light-textPrimary dark:text-dark-textPrimary">
+                <Database className="w-4 h-4 text-indigo-500" />
+                <span>Full Relational Persistence</span>
+              </div>
+              <p className="text-[11px] text-light-textSecondary dark:text-dark-textSecondary leading-normal">
+                Every project, conversion, test run, and theme preference is securely saved in Prisma ORM.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Right column: Authentication Card */}
+        <div className="lg:col-span-5">
+          <div className="p-6 md:p-8 rounded-xl border border-light-border dark:border-dark-border bg-light-surface dark:bg-dark-surface shadow-2xl relative overflow-hidden">
+            <div className="mb-6 space-y-1">
+              <h2 className="text-xl font-bold tracking-tight text-light-textPrimary dark:text-dark-textPrimary">
+                {mode === 'signup' ? 'Create developer account' : 'Sign in to workspace'}
+              </h2>
+              <p className="text-xs text-light-textSecondary dark:text-dark-textSecondary">
+                {mode === 'signup'
+                  ? 'Get started with AI-driven legacy code modernization.'
+                  : 'Enter your credentials to access your saved conversions.'}
+              </p>
+            </div>
+
+            {/* Error Message */}
+            {formError && (
+              <div className="mb-4 p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-medium">
+                {formError}
               </div>
             )}
-          </div>
-        </div>
-      </section>
 
-      {/* Main Catalog Section */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-10">
-        {/* Search & Filter Header Bar */}
-        <div className="bg-[#DFF3FF]/50 rounded-2xl border border-[#BEE3F8] p-5 mb-8 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
-            {/* Live Search Input */}
-            <div className="md:col-span-6 relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Search tablet brand (Dolo, Augmentin), generic composition, or manufacturer..."
-                className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#0F4C81] transition"
-              />
-            </div>
-
-            {/* Manufacturer Dropdown */}
-            <div className="md:col-span-3">
-              <select
-                value={selectedCompany}
-                onChange={e => setSelectedCompany(e.target.value)}
-                className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0F4C81]"
-              >
-                <option value="ALL">All Pharma Companies</option>
-                {companies.filter(c => c !== 'ALL').map(comp => (
-                  <option key={comp} value={comp}>{comp}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Stock Availability Filter */}
-            <div className="md:col-span-3">
-              <select
-                value={stockFilter}
-                onChange={e => setStockFilter(e.target.value)}
-                className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0F4C81]"
-              >
-                <option value="ALL">All Stock Statuses</option>
-                <option value="in_stock">In Stock (&gt;20 Boxes)</option>
-                <option value="low_stock">Low Stock (&le;20 Boxes)</option>
-                <option value="out_of_stock">Out of Stock</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Quick Generic Filter Chips */}
-          <div className="flex items-center gap-2 pt-2 border-t border-cyan-200 overflow-x-auto text-xs pb-1">
-            <span className="text-slate-500 font-semibold shrink-0 text-[11px]">Popular Formulations:</span>
-            {['Paracetamol', 'Amoxicillin', 'Pantoprazole', 'Azithromycin', 'Metformin', 'Telmisartan', 'Vitamin C'].map(chip => (
-              <button
-                key={chip}
-                onClick={() => setSearch(chip)}
-                className={`px-3 py-1 rounded-full border text-[11px] transition shrink-0 ${
-                  search === chip
-                    ? 'bg-[#0F4C81] text-white border-[#0F4C81] font-bold'
-                    : 'bg-white text-slate-600 hover:bg-slate-50 border-slate-200'
-                }`}
-              >
-                {chip}
-              </button>
-            ))}
-            {search && (
-              <button
-                onClick={() => setSearch('')}
-                className="text-red-600 text-xs font-semibold ml-2 hover:underline shrink-0"
-              >
-                Clear Filter
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Product Catalog Grid Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-black text-slate-900 tracking-tight">Wholesale Medicine Catalog</h2>
-            <span className="bg-[#DFF3FF] text-[#0F4C81] text-xs font-bold px-2.5 py-0.5 rounded-full border border-[#BEE3F8]">
-              {products.length} Products
-            </span>
-          </div>
-          <span className="text-xs text-slate-500">Pharma GST 12% included • Direct from Manufacturer</span>
-        </div>
-
-        {loading ? (
-          <div className="text-center py-20 bg-white rounded-2xl border border-slate-200">
-            <div className="inline-block animate-spin w-8 h-8 border-4 border-[#0F4C81] border-t-transparent rounded-full mb-3" />
-            <p className="text-xs font-semibold text-slate-600">Loading Sakthimurugan wholesale catalog...</p>
-          </div>
-        ) : products.length === 0 ? (
-          <div className="text-center py-20 bg-white rounded-2xl border border-slate-200">
-            <AlertTriangle className="w-10 h-10 text-amber-500 mx-auto mb-3" />
-            <h3 className="text-base font-bold text-slate-800">No medicines found matching criteria</h3>
-            <p className="text-xs text-slate-500 mt-1">Try clearing your search query or selecting &quot;All Pharma Companies&quot;.</p>
-            <button
-              onClick={() => { setSearch(''); setSelectedCompany('ALL'); setStockFilter('ALL'); }}
-              className="mt-4 bg-[#0F4C81] text-white text-xs font-bold px-4 py-2 rounded-xl"
-            >
-              Reset Filters
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {products.map(product => {
-              const qty = getQty(product.id);
-              const unit = getUnit(product.id);
-              const isBox = unit === 'BOX';
-              const currentPrice = isBox ? product.pricePerBox : product.pricePerStrip;
-              const isOutOfStock = product.stockQuantity === 0;
-              const isLowStock = product.stockQuantity > 0 && product.stockQuantity <= 20;
-
-              return (
-                <div
-                  key={product.id}
-                  className="bg-white rounded-2xl border border-slate-200 shadow-xs hover:border-[#BEE3F8] hover:shadow-md transition-all duration-200 flex flex-col justify-between overflow-hidden"
-                >
-                  {/* Top Image & Status */}
-                  <div className="relative h-40 bg-slate-50 border-b border-slate-100 overflow-hidden">
-                    <img
-                      src={product.imageUrl || 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=600&auto=format&fit=crop&q=80'}
-                      alt={product.brandName}
-                      className="w-full h-full object-cover object-center"
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {mode === 'signup' && (
+                <div>
+                  <label className="block text-xs font-medium text-light-textSecondary dark:text-dark-textSecondary mb-1.5">
+                    Full Name
+                  </label>
+                  <div className="relative">
+                    <User className="w-4 h-4 text-light-textSecondary dark:text-dark-textSecondary absolute left-3 top-2.5" />
+                    <input
+                      type="text"
+                      required
+                      value={name}
+                      onChange={e => setName(e.target.value)}
+                      placeholder="e.g. Alex Morgan"
+                      className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-light-border dark:border-dark-border bg-light-elevated dark:bg-dark-elevated text-light-textPrimary dark:text-dark-textPrimary placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
-
-                    {/* Stock Status Badge */}
-                    <div className="absolute top-2.5 left-2.5">
-                      {isOutOfStock ? (
-                        <span className="bg-red-100 text-red-800 text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs">
-                          Out of Stock
-                        </span>
-                      ) : isLowStock ? (
-                        <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs">
-                          Low Stock ({product.stockQuantity} boxes)
-                        </span>
-                      ) : (
-                        <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs">
-                          In Stock ({product.stockQuantity} boxes)
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="absolute bottom-2.5 right-2.5 bg-white/90 text-[10px] font-mono px-2 py-0.5 rounded text-slate-700 shadow-xs">
-                      Exp: {product.expiryDate}
-                    </div>
-                  </div>
-
-                  {/* Body Details */}
-                  <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
-                    <div>
-                      <div className="text-[10px] font-bold text-[#0F4C81] uppercase tracking-wider">
-                        {product.companyName}
-                      </div>
-                      <h3 className="font-bold text-slate-900 text-sm mt-0.5">
-                        {product.brandName}
-                      </h3>
-                      <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
-                        {product.genericName}
-                      </p>
-
-                      <div className="mt-2 text-[10px] text-slate-500 font-mono">
-                        Batch: {product.batchNumber} • HSN: {product.hsnCode || '3004'}
-                      </div>
-                    </div>
-
-                    {/* Unit Toggle and Price Display */}
-                    <div className="bg-[#DFF3FF]/50 p-2.5 rounded-xl border border-[#BEE3F8] space-y-2">
-                      <div className="flex items-center justify-between text-xs">
-                        <div className="inline-flex rounded-lg bg-white p-0.5 border border-slate-200 text-[10px] font-bold">
-                          <button
-                            type="button"
-                            onClick={() => handleUnitToggle(product.id, 'BOX')}
-                            className={`px-2 py-0.5 rounded-md transition ${
-                              isBox ? 'bg-[#0F4C81] text-white' : 'text-slate-600 hover:text-[#0F4C81]'
-                            }`}
-                          >
-                            Box (10x)
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleUnitToggle(product.id, 'STRIP')}
-                            className={`px-2 py-0.5 rounded-md transition ${
-                              !isBox ? 'bg-[#0F4C81] text-white' : 'text-slate-600 hover:text-[#0F4C81]'
-                            }`}
-                          >
-                            Strip
-                          </button>
-                        </div>
-
-                        <div className="text-right">
-                          <span className="text-base font-black text-[#0F4C81]">
-                            ₹{currentPrice?.toFixed(2)}
-                          </span>
-                          <span className="text-[10px] text-slate-500 block">
-                            per {unit.toLowerCase()}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Bottom Quantity Stepper & Add Button */}
-                    <div className="space-y-2 pt-1">
-                      {isBox && (
-                        <div className="flex items-center gap-1 text-[10px]">
-                          <span className="text-slate-400 font-semibold">Bulk:</span>
-                          {[5, 10, 25, 50].map(tier => (
-                            <button
-                              key={tier}
-                              onClick={() => setDirectQty(product.id, tier)}
-                              className={`px-1.5 py-0.5 rounded border transition font-bold ${
-                                qty === tier
-                                  ? 'bg-[#0F4C81] text-white border-[#0F4C81]'
-                                  : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
-                              }`}
-                            >
-                              +{tier}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-
-                      <div className="flex items-center gap-2">
-                        {/* Stepper */}
-                        <div className="flex items-center border border-slate-300 rounded-xl bg-white overflow-hidden">
-                          <button
-                            onClick={() => handleQtyChange(product.id, -1)}
-                            disabled={qty <= 1}
-                            className="p-1.5 hover:bg-slate-100 text-slate-700 disabled:opacity-30 transition"
-                          >
-                            <Minus className="w-3.5 h-3.5" />
-                          </button>
-                          <span className="px-2.5 font-bold text-xs text-slate-900 min-w-[24px] text-center">
-                            {qty}
-                          </span>
-                          <button
-                            onClick={() => handleQtyChange(product.id, 1)}
-                            className="p-1.5 hover:bg-slate-100 text-slate-700 transition"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-
-                        {/* Add Button */}
-                        <button
-                          onClick={() => handleAdd(product)}
-                          disabled={isOutOfStock}
-                          className="flex-1 bg-[#0F4C81] hover:bg-[#0B3860] disabled:bg-slate-300 text-white font-bold py-2 px-3 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-xs"
-                        >
-                          <ShoppingBag className="w-3.5 h-3.5" />
-                          <span>{isOutOfStock ? 'Out of Stock' : 'Add to Cart'}</span>
-                        </button>
-                      </div>
-                    </div>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+              )}
 
-      {/* Logistics & Fleet Delivery Section (Light Cyan Boxes) */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-16">
-        <div className="bg-[#DFF3FF] rounded-3xl p-8 sm:p-10 border border-[#BEE3F8] shadow-sm">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-            <div className="lg:col-span-7 space-y-4">
-              <div className="inline-flex items-center gap-2 bg-white text-[#0F4C81] px-3.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider border border-[#BEE3F8]">
-                <Truck className="w-4 h-4 text-[#0F4C81]" />
-                Dedicated SMM Logistics Fleet
-              </div>
-              <h3 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
-                Daily Scheduled Wholesale Delivery Across Erode District
-              </h3>
-              <p className="text-slate-600 text-sm leading-relaxed">
-                Sakthimurugan Medical Agencies operates our own wholesale delivery vans. Morning orders confirmed before 11:30 AM are dispatched on same-day afternoon routes.
-              </p>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-2">
-                <div className="bg-white border border-[#BEE3F8] p-3 rounded-xl">
-                  <div className="font-bold text-[#0F4C81]">Route 1: Erode Central</div>
-                  <div className="text-slate-500 mt-0.5">Gandhiji Rd, Nethaji Rd, Marapalam, Railway Feeder</div>
-                </div>
-                <div className="bg-white border border-[#BEE3F8] p-3 rounded-xl">
-                  <div className="font-bold text-[#0F4C81]">Route 2: Perundurai Corridor</div>
-                  <div className="text-slate-500 mt-0.5">SIPCOT, RS Road, Vijayamangalam, Chennimalai</div>
-                </div>
-                <div className="bg-white border border-[#BEE3F8] p-3 rounded-xl">
-                  <div className="font-bold text-[#0F4C81]">Route 3: Bhavani &amp; Kooduthurai</div>
-                  <div className="text-slate-500 mt-0.5">Bhavani Main, Kooduthurai, Komarapalayam border</div>
-                </div>
-                <div className="bg-white border border-[#BEE3F8] p-3 rounded-xl">
-                  <div className="font-bold text-[#0F4C81]">Route 4: Gobi &amp; Sathy Belt</div>
-                  <div className="text-slate-500 mt-0.5">Gobichettipalayam, Sathyamangalam, Anthiyur</div>
+              <div>
+                <label className="block text-xs font-medium text-light-textSecondary dark:text-dark-textSecondary mb-1.5">
+                  Email Address
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-light-textSecondary dark:text-dark-textSecondary absolute left-3 top-2.5" />
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="developer@company.com"
+                    className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-light-border dark:border-dark-border bg-light-elevated dark:bg-dark-elevated text-light-textPrimary dark:text-dark-textPrimary placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
                 </div>
               </div>
+
+              <div>
+                <label className="block text-xs font-medium text-light-textSecondary dark:text-dark-textSecondary mb-1.5">
+                  Password
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-light-textSecondary dark:text-dark-textSecondary absolute left-3 top-2.5" />
+                  <input
+                    type="password"
+                    required
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder="••••••••••••"
+                    className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-light-border dark:border-dark-border bg-light-elevated dark:bg-dark-elevated text-light-textPrimary dark:text-dark-textPrimary placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                {mode === 'signup' && password && (
+                  <div className="mt-2 space-y-1">
+                    <div className="w-full h-1 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full transition-all duration-300 ${
+                          strength < 50 ? 'bg-rose-500 w-1/3' : strength < 100 ? 'bg-amber-500 w-2/3' : 'bg-emerald-500 w-full'
+                        }`}
+                      />
+                    </div>
+                    <span className="text-[10px] text-light-textSecondary dark:text-dark-textSecondary">
+                      Password strength: {strength < 50 ? 'Weak' : strength < 100 ? 'Moderate' : 'Strong'}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {mode === 'signup' && (
+                <div>
+                  <label className="block text-xs font-medium text-light-textSecondary dark:text-dark-textSecondary mb-1.5">
+                    Confirm Password
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-light-textSecondary dark:text-dark-textSecondary absolute left-3 top-2.5" />
+                    <input
+                      type="password"
+                      required
+                      value={confirmPassword}
+                      onChange={e => setConfirmPassword(e.target.value)}
+                      placeholder="••••••••••••"
+                      className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-light-border dark:border-dark-border bg-light-elevated dark:bg-dark-elevated text-light-textPrimary dark:text-dark-textPrimary placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={submitting}
+                className="w-full py-2.5 px-4 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 rounded-lg shadow-sm transition flex items-center justify-center gap-2"
+              >
+                {submitting ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>Processing securely...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>{mode === 'signup' ? 'Create Account & Launch' : 'Sign In to Workspace'}</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </>
+                )}
+              </button>
+            </form>
+
+            <div className="mt-6 pt-4 border-t border-light-border dark:border-dark-border text-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setMode(mode === 'signin' ? 'signup' : 'signin');
+                  setFormError(null);
+                }}
+                className="text-xs text-light-accent dark:text-dark-accent hover:underline font-medium"
+              >
+                {mode === 'signin'
+                  ? "Don't have an account? Create one now"
+                  : 'Already registered? Sign in here'}
+              </button>
             </div>
 
-            <div className="lg:col-span-5 bg-white border border-[#BEE3F8] p-6 rounded-2xl space-y-4 shadow-sm">
-              <h4 className="font-bold text-base text-slate-900 flex items-center gap-2">
-                <CreditCard className="w-5 h-5 text-[#0F4C81]" />
-                Payment Details &amp; Credit Account
-              </h4>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Eligible retail pharmacies receive an interest-free 15-day or 30-day wholesale credit cycle. Track your invoices, live balances, and record payments directly via our portal.
-              </p>
-              <div className="pt-2">
-                <Link
-                  href="/register"
-                  className="w-full bg-[#0F4C81] hover:bg-[#0B3860] text-white font-bold py-3 px-4 rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-sm"
-                >
-                  <span>Apply for Wholesale Credit Line</span>
-                  <ArrowRight className="w-4 h-4" />
-                </Link>
-              </div>
+            <div className="mt-4 flex items-center justify-center gap-1.5 text-[11px] text-light-textSecondary dark:text-dark-textSecondary">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+              <span>Bcrypt hashed & JWT token authentication</span>
             </div>
           </div>
         </div>
-      </section>
+      </main>
+
+      {/* Footer */}
+      <footer className="px-6 py-4 border-t border-light-border dark:border-dark-border text-center text-xs text-light-textSecondary dark:text-dark-textSecondary">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+          <span>Legacy → Modern AI Migration Platform © 2026. Production Full-Stack Edition.</span>
+          <div className="flex items-center gap-4 text-[11px] font-mono">
+            <span>Next.js 14 App Router</span>
+            <span>•</span>
+            <span>Prisma ORM</span>
+            <span>•</span>
+            <span>Relational SQLite</span>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

@@ -1,39 +1,81 @@
+import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { prisma } from './prisma';
+import { NextRequest } from 'next/server';
+import prisma from './prisma';
 
-export const JWT_SECRET = process.env.JWT_SECRET || 'sakthimurugan_secret_jwt_key_erode_2026';
+const AUTH_SECRET = process.env.AUTH_SECRET || 'legacy-modern-super-secure-production-jwt-secret-key-2026';
 
 export interface TokenPayload {
-  id: number;
+  userId: string;
   email: string;
-  role: string;
+  name: string;
+  iat?: number;
+  exp?: number;
 }
 
-export function signToken(payload: TokenPayload): string {
-  return jwt.sign(payload, JWT_SECRET, {
-    expiresIn: (process.env.JWT_EXPIRES_IN || '7d') as any
-  });
+export async function hashPassword(password: string): Promise<string> {
+  const salt = await bcrypt.genSalt(10);
+  return bcrypt.hash(password, salt);
 }
 
-export async function verifyAuth(request: Request) {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return { user: null, error: 'Authorization token required' };
-  }
+export async function comparePassword(password: string, hash: string): Promise<boolean> {
+  return bcrypt.compare(password, hash);
+}
 
-  const token = authHeader.split(' ')[1];
+export function signToken(payload: { userId: string; email: string; name: string }): string {
+  return jwt.sign(payload, AUTH_SECRET, { expiresIn: '7d' });
+}
+
+export function verifyToken(token: string): TokenPayload | null {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as TokenPayload;
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.id }
-    });
+    return jwt.verify(token, AUTH_SECRET) as TokenPayload;
+  } catch (error) {
+    return null;
+  }
+}
 
-    if (!user) {
-      return { user: null, error: 'User account not found' };
+export async function getAuthenticatedUser(request: NextRequest) {
+  try {
+    let token: string | null = null;
+
+    // Check Authorization header
+    const authHeader = request.headers.get('authorization');
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
     }
 
-    return { user, error: null };
-  } catch (err: any) {
-    return { user: null, error: 'Invalid or expired token' };
+    // Fallback to cookie
+    if (!token) {
+      const cookie = request.cookies.get('token');
+      if (cookie) {
+        token = cookie.value;
+      }
+    }
+
+    if (!token) {
+      return null;
+    }
+
+    const payload = verifyToken(token);
+    if (!payload || !payload.userId) {
+      return null;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        createdAt: true,
+        updatedAt: true,
+        preferences: true,
+      },
+    });
+
+    return user;
+  } catch (error) {
+    console.error('Error authenticating user:', error);
+    return null;
   }
 }

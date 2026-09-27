@@ -2,24 +2,16 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const dbPath = path.join(__dirname, '..', 'prisma', 'dev.db');
-
-console.log('--- Initializing Sakthimurugan Medical Agencies Local SQLite Database ---');
+console.log('[INIT-DB] Initializing Legacy → Modern database runtime...');
 
 try {
-  console.log('1. Pushing Prisma schema to SQLite...');
-  execSync('npx.cmd prisma db push --accept-data-loss', { stdio: 'inherit', cwd: path.join(__dirname, '..') });
-} catch (e) {
-  try {
-    execSync('npx prisma db push --accept-data-loss', { stdio: 'inherit', cwd: path.join(__dirname, '..') });
-  } catch (err) {
-    console.error('Prisma push warning:', err.message);
-  }
-}
+  // Generate client
+  execSync('npx.cmd prisma generate', { stdio: 'inherit' });
 
-try {
-  console.log('2. Running SQLite seed check...');
-  require('./seed.js');
-} catch (err) {
-  console.error('Seed execution note:', err.message);
+  // Push schema to sqlite if needed
+  execSync('npx.cmd prisma db push --skip-generate', { stdio: 'inherit' });
+
+  console.log('[INIT-DB] Database schema verified and active.');
+} catch (error) {
+  console.error('[INIT-DB] Database initialization error:', error);
 }

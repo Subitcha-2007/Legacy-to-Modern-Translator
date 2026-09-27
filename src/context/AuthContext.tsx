@@ -1,177 +1,165 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
 
-export interface User {
-  id: number;
-  role: 'RETAILER' | 'ADMIN';
-  shopName?: string;
-  ownerName: string;
+export interface UserProfile {
+  id: string;
+  name: string;
   email: string;
-  phone: string;
-  dlNumber?: string;
-  gstNumber?: string;
-  isApproved: boolean;
-  creditLimit: number;
-  currentBalance: number;
-  address?: string;
-  pincode?: string;
-}
-
-export interface DemoUserOption {
-  id: number;
-  role: 'RETAILER' | 'ADMIN';
-  shopName: string;
-  ownerName: string;
-  email: string;
-  phone?: string;
-  isApproved: boolean;
-  creditLimit: number;
-  currentBalance: number;
-  availableCredit: number;
+  theme: string;
+  stats?: {
+    projects: number;
+    conversions: number;
+    tests: number;
+  };
 }
 
 interface AuthContextType {
-  user: User | null;
-  token: string | null;
+  user: UserProfile | null;
   loading: boolean;
-  demoUsers: DemoUserOption[];
-  login: (token: string, userData: User) => void;
-  logout: () => void;
+  theme: string;
+  setThemePreference: (theme: 'dark' | 'light' | 'system') => Promise<void>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  register: (data: { name: string; email: string; password: string; confirmPassword: string }) => Promise<{ success: boolean; error?: string }>;
+  logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
-  fetchDemoUsers: () => Promise<void>;
-  switchDemoUser: (userId: number) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [demoUsers, setDemoUsers] = useState<DemoUserOption[]>([]);
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [theme, setTheme] = useState<string>('dark');
+  const router = useRouter();
+  const pathname = usePathname();
 
-  const fetchCurrentUser = useCallback(async (authToken: string) => {
-    try {
-      const res = await fetch('/api/auth/me', {
-        headers: { Authorization: `Bearer ${authToken}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setUser(data.user);
-        localStorage.setItem('smm_user', JSON.stringify(data.user));
-      } else {
-        logout();
-      }
-    } catch (e) {
-      console.error('Failed to fetch user:', e);
+  const applyThemeToDOM = (selectedTheme: string) => {
+    let activeDark = false;
+    if (selectedTheme === 'dark') {
+      activeDark = true;
+    } else if (selectedTheme === 'light') {
+      activeDark = false;
+    } else if (typeof window !== 'undefined') {
+      activeDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     }
-  }, []);
 
-  const fetchDemoUsers = useCallback(async () => {
+    if (activeDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  };
+
+  const fetchUser = useCallback(async () => {
     try {
-      const res = await fetch('/api/admin/demo-retailers');
+      const res = await fetch('/api/auth/me');
       if (res.ok) {
         const data = await res.json();
-        const list: DemoUserOption[] = [];
-        if (data.admin) {
-          list.push({
-            id: data.admin.id,
-            role: data.admin.role,
-            shopName: 'Sakthimurugan Central Wholesale Depot',
-            ownerName: data.admin.ownerName || 'Admin Desk',
-            email: data.admin.email,
-            isApproved: true,
-            creditLimit: 0,
-            currentBalance: 0,
-            availableCredit: 0
-          });
+        if (data.success && data.user) {
+          setUser(data.user);
+          const savedTheme = data.user.theme || 'dark';
+          setTheme(savedTheme);
+          applyThemeToDOM(savedTheme);
+          return;
         }
-        if (Array.isArray(data.retailers)) {
-          list.push(...data.retailers);
-        }
-        setDemoUsers(list);
       }
+      setUser(null);
     } catch (err) {
-      console.error('Failed to fetch demo users list:', err);
+      console.error('Error checking authentication:', err);
+      setUser(null);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    const initAuth = async () => {
-      await fetchDemoUsers();
+    fetchUser();
+  }, [fetchUser]);
 
-      const savedToken = localStorage.getItem('smm_token');
-      const savedUser = localStorage.getItem('smm_user');
-      if (savedToken && savedUser) {
-        try {
-          setToken(savedToken);
-          setUser(JSON.parse(savedUser));
-          await fetchCurrentUser(savedToken);
-        } catch (err) {
-          localStorage.removeItem('smm_token');
-          localStorage.removeItem('smm_user');
-        }
-      } else {
-        // Default to first approved retailer if available
-        try {
-          const res = await fetch('/api/admin/demo-retailers');
-          if (res.ok) {
-            const data = await res.json();
-            const approved = data.retailers?.find((r: any) => r.isApproved);
-            if (approved) {
-              await switchDemoUser(approved.id);
-            }
-          }
-        } catch (e) {
-          console.error('Initial default retailer switch error:', e);
-        }
+  // Protected route guard
+  useEffect(() => {
+    if (!loading) {
+      const isPublicPath = pathname === '/' || pathname === '/login' || pathname === '/register';
+      if (!user && !isPublicPath) {
+        router.push('/');
       }
-      setLoading(false);
-    };
-
-    initAuth();
-  }, [fetchCurrentUser, fetchDemoUsers]);
-
-  const login = (newToken: string, userData: User) => {
-    setToken(newToken);
-    setUser(userData);
-    localStorage.setItem('smm_token', newToken);
-    localStorage.setItem('smm_user', JSON.stringify(userData));
-  };
-
-  const logout = () => {
-    setToken(null);
-    setUser(null);
-    localStorage.removeItem('smm_token');
-    localStorage.removeItem('smm_user');
-  };
-
-  const refreshUser = async () => {
-    if (token) {
-      await fetchCurrentUser(token);
     }
-    await fetchDemoUsers();
+  }, [user, loading, pathname, router]);
+
+  const setThemePreference = async (newTheme: 'dark' | 'light' | 'system') => {
+    setTheme(newTheme);
+    applyThemeToDOM(newTheme);
+
+    if (user) {
+      setUser(prev => (prev ? { ...prev, theme: newTheme } : null));
+      try {
+        await fetch('/api/preferences', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ theme: newTheme }),
+        });
+      } catch (err) {
+        console.error('Failed to update theme in database:', err);
+      }
+    }
   };
 
-  // Connects directly to backend database via demoLogin
-  const switchDemoUser = async (userId: number): Promise<boolean> => {
+  const login = async (email: string, password: string) => {
     try {
-      const res = await fetch('/api/auth/demo-login', {
+      const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId })
+        body: JSON.stringify({ email, password }),
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        login(data.token, data.user);
-        return true;
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        return { success: false, error: data.error || 'Failed to sign in.' };
       }
-      return false;
+
+      setUser(data.user);
+      const userTheme = data.user.theme || 'dark';
+      setTheme(userTheme);
+      applyThemeToDOM(userTheme);
+      return { success: true };
     } catch (err) {
-      console.error('Error switching demo user:', err);
-      return false;
+      return { success: false, error: 'Network error. Please try again.' };
+    }
+  };
+
+  const register = async (formData: { name: string; email: string; password: string; confirmPassword: string }) => {
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        return { success: false, error: data.error || 'Failed to create account.' };
+      }
+
+      setUser(data.user);
+      const userTheme = data.user.theme || 'dark';
+      setTheme(userTheme);
+      applyThemeToDOM(userTheme);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: 'Network error. Please try again.' };
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (err) {
+      console.error('Logout error:', err);
+    } finally {
+      setUser(null);
+      router.push('/');
     }
   };
 
@@ -179,20 +167,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider
       value={{
         user,
-        token,
         loading,
-        demoUsers,
+        theme,
+        setThemePreference,
         login,
+        register,
         logout,
-        refreshUser,
-        fetchDemoUsers,
-        switchDemoUser
+        refreshUser: fetchUser,
       }}
     >
       {children}
     </AuthContext.Provider>
   );
-}
+};
 
 export function useAuth() {
   const context = useContext(AuthContext);

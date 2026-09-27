@@ -1,56 +1,63 @@
 import { NextRequest, NextResponse } from 'next/server';
-import bcrypt from 'bcryptjs';
-import { prisma } from '@/lib/prisma';
-import { signToken } from '@/lib/auth';
+import prisma from '@/lib/prisma';
+import { comparePassword, signToken } from '@/lib/auth';
 
 export async function POST(req: NextRequest) {
   try {
-    const { email, password } = await req.json();
+    const body = await req.json();
+    const { email, password } = body;
 
     if (!email || !password) {
-      return NextResponse.json({ error: 'Please provide both email and password.' }, { status: 400 });
+      return NextResponse.json({ error: 'Please enter both email and password.' }, { status: 400 });
     }
 
+    const cleanEmail = email.toLowerCase().trim();
+
     const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() }
+      where: { email: cleanEmail },
+      include: {
+        preferences: true,
+      },
     });
 
     if (!user) {
       return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 });
     }
 
-    const isMatch = await bcrypt.compare(password, user.passwordHash);
-    if (!isMatch) {
+    const isValid = await comparePassword(password, user.passwordHash);
+    if (!isValid) {
       return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 });
     }
 
     const token = signToken({
-      id: user.id,
+      userId: user.id,
       email: user.email,
-      role: user.role
+      name: user.name,
     });
 
-    return NextResponse.json({
-      message: 'Login successful',
-      token,
+    const response = NextResponse.json({
+      success: true,
       user: {
         id: user.id,
-        role: user.role,
-        shopName: user.shopName,
-        ownerName: user.ownerName,
+        name: user.name,
         email: user.email,
-        phone: user.phone,
-        dlNumber: user.dlNumber,
-        gstNumber: user.gstNumber,
-        isApproved: user.isApproved,
-        creditLimit: user.creditLimit,
-        currentBalance: user.currentBalance,
-        address: user.address,
-        pincode: user.pincode
-      }
+        theme: user.preferences?.theme || 'dark',
+      },
+      token,
+      message: 'Signed in successfully.',
     });
-  } catch (error: any) {
+
+    response.cookies.set('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7,
+      path: '/',
+    });
+
+    return response;
+  } catch (error) {
     console.error('Login error:', error);
-    return NextResponse.json({ error: 'Login failed: ' + error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Authentication failed. Please try again.' }, { status: 500 });
   }
 }

@@ -1,13 +1,11 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/context/AuthContext';
-import { CartProvider } from '@/context/CartContext';
-import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
+import { ToastProvider } from '@/context/ToastContext';
 
 export const metadata: Metadata = {
-  title: 'Sakthimurugan Medical Agencies ("SMM") | Wholesale Medical Supplier Erode',
-  description: 'Premier B2B wholesale pharmaceutical supplier serving licensed retail medical shops across Erode district, Tamil Nadu. Fast fleet delivery, credit ledger, and payment details.',
+  title: 'Legacy → Modern | AI-Powered Code Modernization Platform',
+  description: 'Transform legacy code into modern, production-ready applications with AI-assisted modernization, automated behavioral test verification, and AST analysis.',
 };
 
 export default function RootLayout({
@@ -16,16 +14,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className="min-h-screen flex flex-col bg-smm-slate text-slate-900">
+    <html lang="en" className="dark">
+      <body className="bg-light-bg dark:bg-dark-bg text-light-textPrimary dark:text-dark-textPrimary antialiased selection:bg-blue-500/20 selection:text-blue-500">
         <AuthProvider>
-          <CartProvider>
-            <Navbar />
-            <main className="flex-1">
-              {children}
-            </main>
-            <Footer />
-          </CartProvider>
+          <ToastProvider>
+            {children}
+          </ToastProvider>
         </AuthProvider>
       </body>
     </html>

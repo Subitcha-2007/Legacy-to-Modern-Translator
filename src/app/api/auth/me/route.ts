@@ -1,29 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyAuth } from '@/lib/auth';
+import { getAuthenticatedUser } from '@/lib/auth';
+import prisma from '@/lib/prisma';
 
 export async function GET(req: NextRequest) {
-  const { user, error } = await verifyAuth(req);
-  if (!user || error) {
-    return NextResponse.json({ error: error || 'Unauthorized' }, { status: 401 });
+  const user = await getAuthenticatedUser(req);
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  // Fetch counts of projects, conversions, tests
+  const [projectCount, conversionCount, testCount] = await Promise.all([
+    prisma.project.count({ where: { userId: user.id } }),
+    prisma.conversion.count({ where: { userId: user.id } }),
+    prisma.testCase.count({ where: { conversion: { userId: user.id } } }),
+  ]);
+
   return NextResponse.json({
+    success: true,
     user: {
       id: user.id,
-      role: user.role,
-      shopName: user.shopName,
-      ownerName: user.ownerName,
+      name: user.name,
       email: user.email,
-      phone: user.phone,
-      dlNumber: user.dlNumber,
-      gstNumber: user.gstNumber,
-      bankAccount: user.bankAccount,
-      bankIfsc: user.bankIfsc,
-      isApproved: user.isApproved,
-      creditLimit: user.creditLimit,
-      currentBalance: user.currentBalance,
-      address: user.address,
-      pincode: user.pincode
-    }
+      theme: user.preferences?.theme || 'dark',
+      stats: {
+        projects: projectCount,
+        conversions: conversionCount,
+        tests: testCount,
+      },
+    },
   });
 }

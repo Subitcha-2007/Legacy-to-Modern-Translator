@@ -1,28 +1,101 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 15, 23, 42;
-  --background-start-rgb: 248, 250, 252;
-  --background-end-rgb: 255, 255, 255;
+  --bg: #F7F8FA;
+  --surface: #FFFFFF;
+  --elevated: #F1F3F6;
+  --border: #DCE1E8;
+  --text-primary: #1D2430;
+  --text-secondary: #667085;
+  --accent: #4169E1;
+  --accent-hover: #3358C8;
+  --success: #218653;
+  --warning: #A66B00;
+  --error: #C83C4A;
+}
+
+.dark {
+  --bg: #0F1319;
+  --surface: #171C23;
+  --elevated: #1D2430;
+  --border: #2B3440;
+  --text-primary: #F1F5F9;
+  --text-secondary: #98A2B3;
+  --accent: #6D8DFF;
+  --accent-hover: #5B7BE8;
+  --success: #39B77A;
+  --warning: #E4A63A;
+  --error: #E35D6A;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
-  color: rgb(var(--foreground-rgb));
-  background: #F8FAFC;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background-color: var(--bg);
+  color: var(--text-primary);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 150ms ease, color 150ms ease;
 }
 
-@media print {
-  body {
-    background: white;
-  }
-  .no-print {
-    display: none !important;
-  }
-  .print-only {
-    display: block !important;
-  }
+code, pre, .font-mono {
+  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+}
+
+/* Custom crisp scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #2B3440;
+  border-radius: 3px;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #3B4656;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #DCE1E8;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #BCC5D3;
+}
+
+/* Subtle transitions */
+.transition-smooth {
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Left accent bar for active navigation */
+.active-nav-indicator {
+  position: relative;
+}
+.active-nav-indicator::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  background-color: var(--accent);
+  border-radius: 0 2px 2px 0;
 }
